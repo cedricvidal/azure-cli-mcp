@@ -64,7 +64,7 @@ public class AzureLoginHandler {
                         // Start a background thread to keep the process running
                         new Thread(() -> {
                             handleAzLoginBackground();
-                        }).start();
+                        }, "az-login-bg").start();
 
                         // Return the URL and code to the user
                         return line;
@@ -86,11 +86,23 @@ public class AzureLoginHandler {
         try {
             // Check if the process is still waiting for input
             if (process.isAlive()) {
-                try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream()))) {
-                    writer.write("1\n"); // Provide input '1' to the process
-                    writer.flush();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                     BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream()))) {
+                    
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        logger.debug("Azure CLI output (background): {}", line);
+                        
+                        // Only provide input '1' if the line contains "Select a subscription"
+                        if (line.contains("Select a subscription")) {
+                            logger.info("Subscription selection prompt detected, providing input '1'");
+                            writer.write("1\n");
+                            writer.flush();
+                            break;
+                        }
+                    }
                 } catch (IOException e) {
-                    logger.error("Error providing input to 'az login' process", e);
+                    logger.error("Error handling 'az login' process in background", e);
                 }
             }
 
